@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/category_time.dart';
-import '../models/recent_activity.dart';
 import '../theme/app_colors.dart';
 
-/// Static mock data for the dashboard.
+/// Static mock data for the category breakdown chart only.
 ///
-/// This file is the single place that fakes a data source. When real
-/// persistence/API is added later, screens should get this data from
-/// a service/provider instead — the models above stay the same.
+/// Recent activity and today's total are now real, derived from
+/// TrackingService — see lib/services/tracking_service.dart.
 class MockData {
   MockData._();
-
-  static const Duration todayTotal = Duration(hours: 5, minutes: 42);
-  static const Duration todayGoal = Duration(hours: 8);
 
   static const List<CategoryTime> categories = [
     CategoryTime(
@@ -49,33 +44,6 @@ class MockData {
       duration: Duration(minutes: 22),
       percentage: 0.06,
       color: AppColors.textSecondary,
-    ),
-  ];
-
-  static const List<RecentActivity> recentActivities = [
-    RecentActivity(
-      title: 'Flutter Course',
-      category: 'Study',
-      duration: Duration(minutes: 45),
-      timeAgo: '1h ago',
-    ),
-    RecentActivity(
-      title: 'Client Meeting',
-      category: 'Work',
-      duration: Duration(minutes: 30),
-      timeAgo: '3h ago',
-    ),
-    RecentActivity(
-      title: 'Evening Run',
-      category: 'Exercise',
-      duration: Duration(minutes: 25),
-      timeAgo: '5h ago',
-    ),
-    RecentActivity(
-      title: 'YouTube',
-      category: 'Entertainment',
-      duration: Duration(minutes: 20),
-      timeAgo: '6h ago',
     ),
   ];
 }

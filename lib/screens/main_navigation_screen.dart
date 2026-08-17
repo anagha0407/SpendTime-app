@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import '../services/tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'home_screen.dart';
 
-/// Hosts the bottom navigation bar and switches between top-level
-/// sections. Only Home is implemented — the rest are placeholders
-/// until those features are built.
+/// Hosts the bottom navigation bar and owns the single shared
+/// TrackingService instance for the app's lifetime.
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -15,13 +15,19 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
+  late final TrackingService _trackingService;
 
-  static const List<Widget> _screens = [
-    HomeScreen(),
-    _PlaceholderScreen(label: 'Insights'),
-    _PlaceholderScreen(label: 'History'),
-    _PlaceholderScreen(label: 'Profile'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _trackingService = TrackingService();
+  }
+
+  @override
+  void dispose() {
+    _trackingService.dispose();
+    super.dispose();
+  }
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
@@ -29,8 +35,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      HomeScreen(trackingService: _trackingService),
+      const _PlaceholderScreen(label: 'Insights'),
+      const _PlaceholderScreen(label: 'History'),
+      const _PlaceholderScreen(label: 'Profile'),
+    ];
+
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _screens),
+      body: IndexedStack(index: _selectedIndex, children: screens),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,

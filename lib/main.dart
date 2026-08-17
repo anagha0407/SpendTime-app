@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_navigation_screen.dart';
 
 void main() {
   runApp(const SpendTimeApp());
@@ -15,7 +15,7 @@ class SpendTimeApp extends StatelessWidget {
       title: 'SpendTime',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const HomeScreen(),
+      home: const MainNavigationScreen(),
     );
   }
 }

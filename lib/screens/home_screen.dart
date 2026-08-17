@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import '../data/mock_data.dart';
+import '../services/tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
-import '../widgets/overview_card.dart';
-import '../widgets/category_tile.dart';
+import '../widgets/active_session_card.dart';
 import '../widgets/activity_tile.dart';
+import '../widgets/category_tile.dart';
+import '../widgets/overview_card.dart';
+import 'tracking_screen.dart';
 
-/// SpendTime dashboard/home screen.
-/// All data shown here is mock data from MockData for now.
+/// SpendTime dashboard/home screen. Reflects live TrackingService state.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final TrackingService trackingService;
+
+  const HomeScreen({super.key, required this.trackingService});
 
   String _formattedDate() {
     const months = [
@@ -25,70 +29,93 @@ class HomeScreen extends StatelessWidget {
     return '$weekday, ${months[now.month - 1]} ${now.day}';
   }
 
+  void _openTrackingScreen(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TrackingScreen(trackingService: trackingService),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Text('SpendTime', style: AppTextStyles.headline),
-              const SizedBox(height: 4),
-              Text(
-                'Welcome back — here\'s how your day looks.',
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(_formattedDate(), style: AppTextStyles.caption),
-              const SizedBox(height: 20),
+        child: AnimatedBuilder(
+          animation: trackingService,
+          builder: (context, _) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SpendTime', style: AppTextStyles.headline),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Welcome back — here\'s how your day looks.',
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(_formattedDate(), style: AppTextStyles.caption),
+                  const SizedBox(height: 20),
 
-              // Today's overview
-              OverviewCard(
-                total: MockData.todayTotal,
-                goal: MockData.todayGoal,
-              ),
-              const SizedBox(height: 24),
+                  if (trackingService.isTracking) ...[
+                    ActiveSessionCard(
+                      activityName: trackingService.activeActivityName!,
+                      category: trackingService.activeCategory!,
+                      elapsed: trackingService.elapsed,
+                      onTap: () => _openTrackingScreen(context),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
 
-              // Categories
-              Text('Categories', style: AppTextStyles.title),
-              const SizedBox(height: 8),
-              ...MockData.categories.map(
-                (category) => CategoryTile(category: category),
-              ),
-              const SizedBox(height: 16),
+                  OverviewCard(
+                    total: trackingService.todayTotal,
+                    goal: const Duration(hours: 8),
+                  ),
+                  const SizedBox(height: 24),
 
-              // Recent activity
-              Text('Recent Activity', style: AppTextStyles.title),
-              const SizedBox(height: 8),
-              ...MockData.recentActivities.map(
-                (activity) => ActivityTile(activity: activity),
-              ),
-              const SizedBox(height: 8),
+                  Text('Categories', style: AppTextStyles.title),
+                  const SizedBox(height: 8),
+                  ...MockData.categories.map(
+                    (category) => CategoryTile(category: category),
+                  ),
+                  const SizedBox(height: 16),
 
-              // Primary action
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Placeholder for future tracking feature.
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Tracking coming soon!'),
+                  Text('Recent Activity', style: AppTextStyles.title),
+                  const SizedBox(height: 8),
+                  if (trackingService.completedSessions.isEmpty)
+                    Text(
+                      'No sessions yet — start tracking to see them here.',
+                      style: AppTextStyles.caption,
+                    )
+                  else
+                    ...trackingService.completedSessions.map(
+                      (session) => ActivityTile(session: session),
+                    ),
+                  const SizedBox(height: 8),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: trackingService.isTracking
+                          ? null
+                          : () => _openTrackingScreen(context),
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: Text(
+                        trackingService.isTracking
+                            ? 'Tracking in progress'
+                            : 'Start Tracking',
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Start Tracking'),
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
