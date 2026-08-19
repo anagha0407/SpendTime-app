@@ -7,11 +7,13 @@ import '../theme/app_text_styles.dart';
 import '../widgets/active_session_card.dart';
 import '../widgets/activity_tile.dart';
 import '../widgets/category_tile.dart';
+import '../widgets/expense_tile.dart';
 import '../widgets/overview_card.dart';
 import 'tracking_screen.dart';
 import 'add_expense_screen.dart';
 
-/// SpendTime dashboard/home screen. Reflects live TrackingService state.
+/// SpendTime dashboard/home screen. Reflects live TrackingService and
+/// ExpenseService state.
 class HomeScreen extends StatelessWidget {
   final TrackingService trackingService;
   final ExpenseService expenseService;
@@ -58,7 +60,9 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: AnimatedBuilder(
-          animation: trackingService,
+          // Listen to BOTH services, so Home rebuilds whether a
+          // tracking session changes or a new expense is added.
+          animation: Listenable.merge([trackingService, expenseService]),
           builder: (context, _) {
             return SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -110,6 +114,19 @@ class HomeScreen extends StatelessWidget {
                   else
                     ...trackingService.completedSessions.map(
                       (session) => ActivityTile(session: session),
+                    ),
+                  const SizedBox(height: 16),
+
+                  Text('Recent Expenses', style: AppTextStyles.title),
+                  const SizedBox(height: 8),
+                  if (expenseService.expenses.isEmpty)
+                    Text(
+                      'No expenses yet',
+                      style: AppTextStyles.caption,
+                    )
+                  else
+                    ...expenseService.expenses.map(
+                      (expense) => ExpenseTile(expense: expense),
                     ),
                   const SizedBox(height: 20),
 
