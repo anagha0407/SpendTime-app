@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/mock_data.dart';
 import '../services/tracking_service.dart';
+import '../services/expense_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/active_session_card.dart';
@@ -8,12 +9,18 @@ import '../widgets/activity_tile.dart';
 import '../widgets/category_tile.dart';
 import '../widgets/overview_card.dart';
 import 'tracking_screen.dart';
+import 'add_expense_screen.dart';
 
 /// SpendTime dashboard/home screen. Reflects live TrackingService state.
 class HomeScreen extends StatelessWidget {
   final TrackingService trackingService;
+  final ExpenseService expenseService;
 
-  const HomeScreen({super.key, required this.trackingService});
+  const HomeScreen({
+    super.key,
+    required this.trackingService,
+    required this.expenseService,
+  });
 
   String _formattedDate() {
     const months = [
@@ -33,6 +40,14 @@ class HomeScreen extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => TrackingScreen(trackingService: trackingService),
+      ),
+    );
+  }
+
+  void _openAddExpenseScreen(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AddExpenseScreen(expenseService: expenseService),
       ),
     );
   }
@@ -96,7 +111,7 @@ class HomeScreen extends StatelessWidget {
                     ...trackingService.completedSessions.map(
                       (session) => ActivityTile(session: session),
                     ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
 
                   SizedBox(
                     width: double.infinity,
@@ -110,6 +125,16 @@ class HomeScreen extends StatelessWidget {
                             ? 'Tracking in progress'
                             : 'Start Tracking',
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openAddExpenseScreen(context),
+                      icon: const Icon(Icons.receipt_long_rounded),
+                      label: const Text('Add Expense'),
                     ),
                   ),
                 ],

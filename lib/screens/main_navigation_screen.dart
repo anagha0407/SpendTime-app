@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../services/tracking_service.dart';
+import '../services/expense_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'home_screen.dart';
 
-/// Hosts the bottom navigation bar and owns the single shared
-/// TrackingService instance for the app's lifetime.
+/// Hosts the bottom navigation bar and owns the shared service
+/// instances (TrackingService, ExpenseService) for the app's lifetime.
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -16,16 +17,20 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
   late final TrackingService _trackingService;
+  late final ExpenseService _expenseService;
 
-  @override
+ @override
   void initState() {
     super.initState();
     _trackingService = TrackingService();
+    _expenseService = ExpenseService();
+    _expenseService.loadExpenses(); // load saved expenses on app start
   }
 
   @override
   void dispose() {
     _trackingService.dispose();
+    _expenseService.dispose();
     super.dispose();
   }
 
@@ -36,7 +41,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      HomeScreen(trackingService: _trackingService),
+      HomeScreen(
+        trackingService: _trackingService,
+        expenseService: _expenseService,
+      ),
       const _PlaceholderScreen(label: 'Insights'),
       const _PlaceholderScreen(label: 'History'),
       const _PlaceholderScreen(label: 'Profile'),
