@@ -4,6 +4,7 @@ import '../services/expense_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'home_screen.dart';
+import 'history_screen.dart';
 
 /// Hosts the bottom navigation bar and owns the shared service
 /// instances (TrackingService, ExpenseService) for the app's lifetime.
@@ -19,7 +20,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late final TrackingService _trackingService;
   late final ExpenseService _expenseService;
 
- @override
+  @override
   void initState() {
     super.initState();
     _trackingService = TrackingService();
@@ -46,7 +47,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         expenseService: _expenseService,
       ),
       const _PlaceholderScreen(label: 'Insights'),
-      const _PlaceholderScreen(label: 'History'),
+      HistoryScreen(
+        trackingService: _trackingService,
+        expenseService: _expenseService,
+      ),
       const _PlaceholderScreen(label: 'Profile'),
     ];
 
