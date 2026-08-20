@@ -5,9 +5,8 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'home_screen.dart';
 import 'history_screen.dart';
+import 'insights_screen.dart';
 
-/// Hosts the bottom navigation bar and owns the shared service
-/// instances (TrackingService, ExpenseService) for the app's lifetime.
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -46,7 +45,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         trackingService: _trackingService,
         expenseService: _expenseService,
       ),
-      const _PlaceholderScreen(label: 'Insights'),
+      InsightsScreen(
+        trackingService: _trackingService,
+        expenseService: _expenseService,
+      ),
       HistoryScreen(
         trackingService: _trackingService,
         expenseService: _expenseService,
