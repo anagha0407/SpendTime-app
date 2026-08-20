@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
+
 import '../models/expense.dart';
 import '../models/time_category.dart';
+import '../models/tracked_session.dart';
 import '../services/expense_service.dart';
 import '../services/tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
-import '../widgets/insight_stat_card.dart';
-import '../widgets/expense_category_row.dart';
+import '../utils/insight_generator.dart';
 import '../widgets/category_distribution_chart.dart';
 import '../widgets/daily_trend_chart.dart';
+import '../widgets/expense_category_row.dart';
+import '../widgets/generated_insight_tile.dart';
+import '../widgets/insight_stat_card.dart';
 
-/// Insights tab: summary statistics and charts derived from the
-/// existing TrackingService and ExpenseService. Read-only — never
-/// mutates either service.
+/// Insights tab: summary statistics, charts, and personalized insights
+/// derived from the existing TrackingService and ExpenseService.
+///
+/// Read-only — never mutates either service.
 class InsightsScreen extends StatelessWidget {
   final TrackingService trackingService;
   final ExpenseService expenseService;
@@ -38,21 +43,35 @@ class InsightsScreen extends StatelessWidget {
   String _formatDuration(Duration d) {
     final hours = d.inHours;
     final minutes = d.inMinutes.remainder(60);
-    if (hours == 0) return '${minutes}m';
+
+    if (hours == 0) {
+      return '${minutes}m';
+    }
+
     return '${hours}h ${minutes}m';
   }
 
   DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
   static const List<String> _weekdayShort = [
-    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
   ];
 
-  /// Last 7 calendar days (oldest to newest), used as the x-axis for
-  /// both trend charts.
+  /// Last 7 calendar days (oldest to newest), used as the x-axis
+  /// for both trend charts.
   List<DateTime> _last7Days() {
     final today = _dateOnly(DateTime.now());
-    return List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
+
+    return List.generate(
+      7,
+      (i) => today.subtract(Duration(days: 6 - i)),
+    );
   }
 
   @override
@@ -62,7 +81,10 @@ class InsightsScreen extends StatelessWidget {
       body: SafeArea(
         child: AnimatedBuilder(
           // Rebuild when a session completes or an expense is added.
-          animation: Listenable.merge([trackingService, expenseService]),
+          animation: Listenable.merge([
+            trackingService,
+            expenseService,
+          ]),
           builder: (context, _) {
             final expenses = expenseService.expenses;
             final sessions = trackingService.completedSessions;
@@ -72,7 +94,10 @@ class InsightsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Insights', style: AppTextStyles.headline),
+                  Text(
+                    'Insights',
+                    style: AppTextStyles.headline,
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     'Understand your spending and time patterns',
@@ -82,7 +107,25 @@ class InsightsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  Text('Spending Overview', style: AppTextStyles.title),
+                  // ---------------- For You ----------------
+
+                  Text(
+                    'For You',
+                    style: AppTextStyles.title,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGeneratedInsightsSection(
+                    expenses,
+                    sessions,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ---------------- Spending Overview ----------------
+
+                  Text(
+                    'Spending Overview',
+                    style: AppTextStyles.title,
+                  ),
                   const SizedBox(height: 12),
                   if (expenses.isEmpty)
                     _buildEmptyState(
@@ -96,7 +139,12 @@ class InsightsScreen extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  Text('Time Overview', style: AppTextStyles.title),
+                  // ---------------- Time Overview ----------------
+
+                  Text(
+                    'Time Overview',
+                    style: AppTextStyles.title,
+                  ),
                   const SizedBox(height: 12),
                   if (sessions.isEmpty)
                     _buildEmptyState(
@@ -116,20 +164,66 @@ class InsightsScreen extends StatelessWidget {
     );
   }
 
+  // ---------------- Generated Insights ----------------
+
+  Widget _buildGeneratedInsightsSection(
+    List<Expense> expenses,
+    List<TrackedSession> sessions,
+  ) {
+    final insights = generateInsights(
+      expenses: expenses,
+      sessions: sessions,
+    );
+
+    if (insights.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.auto_awesome_rounded,
+        title: 'Keep tracking to unlock personalized insights.',
+        message:
+            'Add more expenses and tracking sessions to see patterns here.',
+      );
+    }
+
+    return _cardWrapper(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: insights
+            .map(
+              (insight) => GeneratedInsightTile(
+                insight: insight,
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
   // ---------------- Spending ----------------
 
   Widget _buildSpendingSection(List<Expense> expenses) {
-    final total = expenses.fold<double>(0, (sum, e) => sum + e.amount);
+    final total = expenses.fold<double>(
+      0,
+      (sum, e) => sum + e.amount,
+    );
 
-    final distinctDays = expenses.map((e) => _dateOnly(e.date)).toSet();
+    final distinctDays = expenses
+        .map((e) => _dateOnly(e.date))
+        .toSet();
+
     final avgDaily = total / distinctDays.length;
 
     final Map<ExpenseCategory, double> byCategory = {};
+
     for (final e in expenses) {
-      byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount;
+      byCategory[e.category] =
+          (byCategory[e.category] ?? 0) + e.amount;
     }
+
     final sortedCategories = byCategory.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+      ..sort(
+        (a, b) => b.value.compareTo(a.value),
+      );
+
     final topCategory = sortedCategories.first;
 
     return Column(
@@ -165,7 +259,10 @@ class InsightsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        Text('Spending Distribution', style: AppTextStyles.title),
+        Text(
+          'Spending Distribution',
+          style: AppTextStyles.title,
+        ),
         const SizedBox(height: 12),
         _cardWrapper(
           child: CategoryDistributionChart(
@@ -182,17 +279,24 @@ class InsightsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        Text('Category Breakdown', style: AppTextStyles.title),
+        Text(
+          'Category Breakdown',
+          style: AppTextStyles.title,
+        ),
         const SizedBox(height: 4),
         _cardWrapper(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
           child: Column(
             children: sortedCategories
                 .map(
                   (entry) => ExpenseCategoryRow(
                     category: entry.key,
                     amount: entry.value,
-                    shareOfTotal: total == 0 ? 0 : entry.value / total,
+                    shareOfTotal:
+                        total == 0 ? 0 : entry.value / total,
                   ),
                 )
                 .toList(),
@@ -200,13 +304,17 @@ class InsightsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        Text('Spending Trend', style: AppTextStyles.title),
+        Text(
+          'Spending Trend',
+          style: AppTextStyles.title,
+        ),
         const SizedBox(height: 12),
         if (distinctDays.length < 2)
           _buildEmptyState(
             icon: Icons.show_chart_rounded,
             title: 'Not enough data for a trend yet',
-            message: 'Add expenses on more than one day to see a trend.',
+            message:
+                'Add expenses on more than one day to see a trend.',
           )
         else
           _buildSpendingTrendChart(expenses),
@@ -216,12 +324,23 @@ class InsightsScreen extends StatelessWidget {
 
   Widget _buildSpendingTrendChart(List<Expense> expenses) {
     final days = _last7Days();
+
     final values = days.map((day) {
       return expenses
-          .where((e) => _dateOnly(e.date) == day)
-          .fold<double>(0, (sum, e) => sum + e.amount);
+          .where(
+            (e) => _dateOnly(e.date) == day,
+          )
+          .fold<double>(
+            0,
+            (sum, e) => sum + e.amount,
+          );
     }).toList();
-    final labels = days.map((day) => _weekdayShort[day.weekday - 1]).toList();
+
+    final labels = days
+        .map(
+          (day) => _weekdayShort[day.weekday - 1],
+        )
+        .toList();
 
     return _cardWrapper(
       child: DailyTrendChart(
@@ -234,25 +353,34 @@ class InsightsScreen extends StatelessWidget {
 
   // ---------------- Time ----------------
 
-  Widget _buildTimeSection(List<dynamic> sessions) {
+  Widget _buildTimeSection(List<TrackedSession> sessions) {
     final totalDuration = sessions.fold<Duration>(
       Duration.zero,
-      (sum, s) => sum + (s.duration as Duration),
+      (sum, s) => sum + s.duration,
     );
 
     final Map<TimeCategory, Duration> byCategory = {};
+
     for (final s in sessions) {
-      final category = s.category as TimeCategory;
-      final duration = s.duration as Duration;
+      final category = s.category;
+      final duration = s.duration;
+
       byCategory[category] =
           (byCategory[category] ?? Duration.zero) + duration;
     }
+
     final sortedCategories = byCategory.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+      ..sort(
+        (a, b) => b.value.compareTo(a.value),
+      );
+
     final topCategory = sortedCategories.first;
 
-    final distinctDays =
-        sessions.map((s) => _dateOnly(s.startTime as DateTime)).toSet();
+    final distinctDays = sessions
+        .map(
+          (s) => _dateOnly(s.startTime),
+        )
+        .toSet();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,7 +408,10 @@ class InsightsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        Text('Time Distribution', style: AppTextStyles.title),
+        Text(
+          'Time Distribution',
+          style: AppTextStyles.title,
+        ),
         const SizedBox(height: 12),
         _cardWrapper(
           child: CategoryDistributionChart(
@@ -297,7 +428,10 @@ class InsightsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        Text('Time Tracking Trend', style: AppTextStyles.title),
+        Text(
+          'Time Tracking Trend',
+          style: AppTextStyles.title,
+        ),
         const SizedBox(height: 12),
         if (distinctDays.length < 2)
           _buildEmptyState(
@@ -312,15 +446,27 @@ class InsightsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTimeTrendChart(List<dynamic> sessions) {
+  Widget _buildTimeTrendChart(List<TrackedSession> sessions) {
     final days = _last7Days();
+
     final values = days.map((day) {
       final totalMinutes = sessions
-          .where((s) => _dateOnly(s.startTime as DateTime) == day)
-          .fold<int>(0, (sum, s) => sum + (s.duration as Duration).inMinutes);
+          .where(
+            (s) => _dateOnly(s.startTime) == day,
+          )
+          .fold<int>(
+            0,
+            (sum, s) => sum + s.duration.inMinutes,
+          );
+
       return totalMinutes.toDouble();
     }).toList();
-    final labels = days.map((day) => _weekdayShort[day.weekday - 1]).toList();
+
+    final labels = days
+        .map(
+          (day) => _weekdayShort[day.weekday - 1],
+        )
+        .toList();
 
     return _cardWrapper(
       child: DailyTrendChart(
@@ -333,14 +479,20 @@ class InsightsScreen extends StatelessWidget {
 
   // ---------------- Shared ----------------
 
-  Widget _cardWrapper({required Widget child, EdgeInsets? padding}) {
+  Widget _cardWrapper({
+    required Widget child,
+    EdgeInsets? padding,
+  }) {
     return Container(
       width: double.infinity,
       padding: padding ?? const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.background, width: 1.5),
+        border: Border.all(
+          color: AppColors.background,
+          width: 1.5,
+        ),
       ),
       child: child,
     );
@@ -357,13 +509,24 @@ class InsightsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.background, width: 1.5),
+        border: Border.all(
+          color: AppColors.background,
+          width: 1.5,
+        ),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 40, color: AppColors.textSecondary),
+          Icon(
+            icon,
+            size: 40,
+            color: AppColors.textSecondary,
+          ),
           const SizedBox(height: 12),
-          Text(title, style: AppTextStyles.title, textAlign: TextAlign.center),
+          Text(
+            title,
+            style: AppTextStyles.title,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 4),
           Text(
             message,
