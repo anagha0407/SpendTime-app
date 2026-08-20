@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/tracked_session.dart';
 import '../models/expense.dart';
 import '../services/tracking_service.dart';
@@ -10,12 +11,16 @@ import '../widgets/expense_tile.dart';
 
 /// Internal helper pairing a history entry (session or expense) with
 /// the timestamp used to sort it, and the widget used to display it.
+///
 /// Not a shared model — this is display-only grouping for this screen.
 class _HistoryEntry {
   final DateTime time;
   final Widget tile;
 
-  const _HistoryEntry({required this.time, required this.tile});
+  const _HistoryEntry({
+    required this.time,
+    required this.tile,
+  });
 }
 
 /// Shows completed time-tracking sessions and saved expenses together,
@@ -32,7 +37,11 @@ class HistoryScreen extends StatelessWidget {
 
   /// Strips the time component so entries can be grouped by calendar day.
   DateTime _dateOnly(DateTime dateTime) {
-    return DateTime(dateTime.year, dateTime.month, dateTime.day);
+    return DateTime(
+      dateTime.year,
+      dateTime.month,
+      dateTime.day,
+    );
   }
 
   String _dayLabel(DateTime day) {
@@ -43,9 +52,20 @@ class HistoryScreen extends StatelessWidget {
     if (day == yesterday) return 'Yesterday';
 
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
+
     return '${day.day} ${months[day.month - 1]} ${day.year}';
   }
 
@@ -54,37 +74,47 @@ class HistoryScreen extends StatelessWidget {
   List<MapEntry<DateTime, List<_HistoryEntry>>> _groupByDay(
     List<TrackedSession> sessions,
     List<Expense> expenses,
+    ExpenseService expenseService,
   ) {
     final Map<DateTime, List<_HistoryEntry>> grouped = {};
 
     for (final session in sessions) {
       final day = _dateOnly(session.startTime);
+
       grouped.putIfAbsent(day, () => []).add(
-        _HistoryEntry(
-          time: session.startTime,
-          tile: SessionHistoryTile(session: session),
-        ),
-      );
+            _HistoryEntry(
+              time: session.startTime,
+              tile: SessionHistoryTile(session: session),
+            ),
+          );
     }
 
     for (final expense in expenses) {
       final day = _dateOnly(expense.date);
+
       grouped.putIfAbsent(day, () => []).add(
-        _HistoryEntry(
-          time: expense.date,
-          tile: ExpenseTile(expense: expense),
-        ),
-      );
+            _HistoryEntry(
+              time: expense.date,
+              tile: ExpenseTile(
+                expense: expense,
+                expenseService: expenseService,
+              ),
+            ),
+          );
     }
 
     // Sort entries within each day, newest first.
     for (final entries in grouped.values) {
-      entries.sort((a, b) => b.time.compareTo(a.time));
+      entries.sort(
+        (a, b) => b.time.compareTo(a.time),
+      );
     }
 
     // Sort the days themselves, newest first.
     final sortedDays = grouped.entries.toList()
-      ..sort((a, b) => b.key.compareTo(a.key));
+      ..sort(
+        (a, b) => b.key.compareTo(a.key),
+      );
 
     return sortedDays;
   }
@@ -93,15 +123,21 @@ class HistoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(
+        title: const Text('History'),
+      ),
       body: SafeArea(
         child: AnimatedBuilder(
           // Rebuild whenever a session completes or an expense is added.
-          animation: Listenable.merge([trackingService, expenseService]),
+          animation: Listenable.merge([
+            trackingService,
+            expenseService,
+          ]),
           builder: (context, _) {
             final dayGroups = _groupByDay(
               trackingService.completedSessions,
               expenseService.expenses,
+              expenseService,
             );
 
             if (dayGroups.isEmpty) {
@@ -139,9 +175,14 @@ class HistoryScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final dayGroup in dayGroups) ...[
-                    Text(_dayLabel(dayGroup.key), style: AppTextStyles.title),
+                    Text(
+                      _dayLabel(dayGroup.key),
+                      style: AppTextStyles.title,
+                    ),
                     const SizedBox(height: 8),
-                    ...dayGroup.value.map((entry) => entry.tile),
+                    ...dayGroup.value.map(
+                      (entry) => entry.tile,
+                    ),
                     const SizedBox(height: 16),
                   ],
                 ],

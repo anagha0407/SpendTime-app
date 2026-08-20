@@ -7,7 +7,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/active_session_card.dart';
 import '../widgets/activity_tile.dart';
 import '../widgets/category_tile.dart';
-import '../widgets/expense_tile.dart';
+import '../widgets/expense_list_section.dart';
 import '../widgets/overview_card.dart';
 import 'tracking_screen.dart';
 import 'add_expense_screen.dart';
@@ -117,17 +117,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   const SizedBox(height: 16),
 
-                  Text('Recent Expenses', style: AppTextStyles.title),
-                  const SizedBox(height: 8),
-                  if (expenseService.expenses.isEmpty)
-                    Text(
-                      'No expenses yet',
-                      style: AppTextStyles.caption,
-                    )
-                  else
-                    ...expenseService.expenses.map(
-                      (expense) => ExpenseTile(expense: expense),
-                    ),
+                  ExpenseListSection(expenseService: expenseService),
                   const SizedBox(height: 20),
 
                   SizedBox(

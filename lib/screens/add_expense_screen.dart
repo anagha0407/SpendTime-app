@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models/expense.dart';
 import '../services/expense_service.dart';
+import '../utils/expense_dialogs.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final ExpenseService expenseService;
+  final Expense? existingExpense; // non-null => editing this expense
 
   const AddExpenseScreen({
     super.key,
     required this.expenseService,
+    this.existingExpense,
   });
 
   @override
@@ -21,6 +24,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   ExpenseCategory _selectedCategory = ExpenseCategory.food;
   DateTime _selectedDate = DateTime.now();
+
+  bool get _isEditing => widget.existingExpense != null;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final existing = widget.existingExpense;
+    if (existing != null) {
+      // Pre-fill the form with the expense being edited.
+      _amountController.text = existing.amount.toString();
+      _descriptionController.text = existing.description;
+      _selectedCategory = existing.category;
+      _selectedDate = existing.date;
+    }
+  }
 
   @override
   void dispose() {
@@ -49,21 +68,51 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
-    widget.expenseService.addExpense(
-      amount: double.parse(_amountController.text.trim()),
-      category: _selectedCategory,
-      date: _selectedDate,
-      description: _descriptionController.text.trim(),
-    );
+    if (_isEditing) {
+      final updatedExpense = Expense(
+        id: widget.existingExpense!.id, // keep the same id
+        amount: double.parse(_amountController.text.trim()),
+        category: _selectedCategory,
+        date: _selectedDate,
+        description: _descriptionController.text.trim(),
+      );
+      widget.expenseService.updateExpense(updatedExpense);
+    } else {
+      widget.expenseService.addExpense(
+        amount: double.parse(_amountController.text.trim()),
+        category: _selectedCategory,
+        date: _selectedDate,
+        description: _descriptionController.text.trim(),
+      );
+    }
 
     Navigator.of(context).pop();
+  }
+
+  Future<void> _deleteExpense() async {
+    final confirmed = await showDeleteExpenseDialog(context);
+    if (!confirmed) return;
+
+    widget.expenseService.deleteExpense(widget.existingExpense!.id);
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Expense'),
+        title: Text(_isEditing ? 'Edit Expense' : 'Add Expense'),
+        actions: [
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded),
+              onPressed: _deleteExpense,
+              tooltip: 'Delete expense',
+            ),
+        ],
       ),
       body: Form(
         key: _formKey,
@@ -111,7 +160,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               const SizedBox(height: 8),
 
               DropdownButtonFormField<ExpenseCategory>(
-                value: _selectedCategory,
+                initialValue: _selectedCategory,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                 ),
@@ -182,7 +231,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 height: 52,
                 child: ElevatedButton(
                   onPressed: _saveExpense,
-                  child: const Text('Save Expense'),
+                  child: Text(_isEditing ? 'Save Changes' : 'Save Expense'),
                 ),
               ),
             ],

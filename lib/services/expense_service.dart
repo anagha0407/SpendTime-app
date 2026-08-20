@@ -52,6 +52,24 @@ class ExpenseService extends ChangeNotifier {
     _saveExpenses();
   }
 
+  /// Replaces an existing expense (matched by id) with updated values.
+  /// Does nothing if no expense with that id exists.
+  void updateExpense(Expense updatedExpense) {
+    final index = _expenses.indexWhere((e) => e.id == updatedExpense.id);
+    if (index == -1) return;
+
+    _expenses[index] = updatedExpense;
+    notifyListeners();
+    _saveExpenses();
+  }
+
+  /// Removes the expense with the given id, if it exists.
+  void deleteExpense(String id) {
+    _expenses.removeWhere((e) => e.id == id);
+    notifyListeners();
+    _saveExpenses();
+  }
+
   /// Writes the full current expense list to SharedPreferences.
   /// Each expense is stored as its own JSON string, all inside one
   /// List<String> saved under a single key.
