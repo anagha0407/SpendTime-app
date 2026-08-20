@@ -7,10 +7,12 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/insight_stat_card.dart';
 import '../widgets/expense_category_row.dart';
+import '../widgets/category_distribution_chart.dart';
+import '../widgets/daily_trend_chart.dart';
 
-/// Insights tab: summary statistics derived from the existing
-/// TrackingService and ExpenseService. Read-only — never mutates
-/// either service.
+/// Insights tab: summary statistics and charts derived from the
+/// existing TrackingService and ExpenseService. Read-only — never
+/// mutates either service.
 class InsightsScreen extends StatelessWidget {
   final TrackingService trackingService;
   final ExpenseService expenseService;
@@ -21,6 +23,18 @@ class InsightsScreen extends StatelessWidget {
     required this.expenseService,
   });
 
+  // Fixed display colors for expense categories, scoped to this
+  // screen only — ExpenseCategory itself has no color of its own.
+  static const Map<ExpenseCategory, Color> _expenseCategoryColors = {
+    ExpenseCategory.food: AppColors.primary,
+    ExpenseCategory.travel: AppColors.secondary,
+    ExpenseCategory.shopping: Color(0xFFFFA726),
+    ExpenseCategory.bills: Color(0xFFEF5350),
+    ExpenseCategory.entertainment: Color(0xFFAB47BC),
+    ExpenseCategory.education: Color(0xFF26A69A),
+    ExpenseCategory.other: AppColors.textSecondary,
+  };
+
   String _formatDuration(Duration d) {
     final hours = d.inHours;
     final minutes = d.inMinutes.remainder(60);
@@ -29,6 +43,17 @@ class InsightsScreen extends StatelessWidget {
   }
 
   DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+
+  static const List<String> _weekdayShort = [
+    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+  ];
+
+  /// Last 7 calendar days (oldest to newest), used as the x-axis for
+  /// both trend charts.
+  List<DateTime> _last7Days() {
+    final today = _dateOnly(DateTime.now());
+    return List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,9 +121,8 @@ class InsightsScreen extends StatelessWidget {
   Widget _buildSpendingSection(List<Expense> expenses) {
     final total = expenses.fold<double>(0, (sum, e) => sum + e.amount);
 
-    final distinctDays =
-        expenses.map((e) => _dateOnly(e.date)).toSet().length;
-    final avgDaily = total / distinctDays;
+    final distinctDays = expenses.map((e) => _dateOnly(e.date)).toSet();
+    final avgDaily = total / distinctDays.length;
 
     final Map<ExpenseCategory, double> byCategory = {};
     for (final e in expenses) {
@@ -107,23 +131,6 @@ class InsightsScreen extends StatelessWidget {
     final sortedCategories = byCategory.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final topCategory = sortedCategories.first;
-
-    // Weekly trend: spending in the last 7 days vs the 7 days before that.
-    final now = DateTime.now();
-    final startOfThisWeek = _dateOnly(now).subtract(const Duration(days: 6));
-    final startOfLastWeek =
-        startOfThisWeek.subtract(const Duration(days: 7));
-
-    final thisWeekTotal = expenses
-        .where((e) => !_dateOnly(e.date).isBefore(startOfThisWeek))
-        .fold<double>(0, (sum, e) => sum + e.amount);
-    final lastWeekTotal = expenses
-        .where(
-          (e) =>
-              !_dateOnly(e.date).isBefore(startOfLastWeek) &&
-              _dateOnly(e.date).isBefore(startOfThisWeek),
-        )
-        .fold<double>(0, (sum, e) => sum + e.amount);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,15 +165,27 @@ class InsightsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        Text('Spending Distribution', style: AppTextStyles.title),
+        const SizedBox(height: 12),
+        _cardWrapper(
+          child: CategoryDistributionChart(
+            segments: sortedCategories
+                .map(
+                  (entry) => ChartSegment(
+                    label: entry.key.label,
+                    value: entry.value,
+                    color: _expenseCategoryColors[entry.key]!,
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        const SizedBox(height: 20),
+
         Text('Category Breakdown', style: AppTextStyles.title),
         const SizedBox(height: 4),
-        Container(
+        _cardWrapper(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.background, width: 1.5),
-          ),
           child: Column(
             children: sortedCategories
                 .map(
@@ -181,78 +200,41 @@ class InsightsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        Text('Recent Trend', style: AppTextStyles.title),
+        Text('Spending Trend', style: AppTextStyles.title),
         const SizedBox(height: 12),
-        _buildTrendCard(thisWeekTotal, lastWeekTotal),
+        if (distinctDays.length < 2)
+          _buildEmptyState(
+            icon: Icons.show_chart_rounded,
+            title: 'Not enough data for a trend yet',
+            message: 'Add expenses on more than one day to see a trend.',
+          )
+        else
+          _buildSpendingTrendChart(expenses),
       ],
     );
   }
 
-  /// Shows spending over the last 7 days, and a comparison to the
-  /// previous 7 days only when there is data for that earlier period
-  /// (otherwise a trend comparison would be misleading).
-  Widget _buildTrendCard(double thisWeekTotal, double lastWeekTotal) {
-    String? trendText;
-    IconData trendIcon = Icons.trending_flat_rounded;
-    Color trendColor = AppColors.textSecondary;
+  Widget _buildSpendingTrendChart(List<Expense> expenses) {
+    final days = _last7Days();
+    final values = days.map((day) {
+      return expenses
+          .where((e) => _dateOnly(e.date) == day)
+          .fold<double>(0, (sum, e) => sum + e.amount);
+    }).toList();
+    final labels = days.map((day) => _weekdayShort[day.weekday - 1]).toList();
 
-    if (lastWeekTotal > 0) {
-      final change = ((thisWeekTotal - lastWeekTotal) / lastWeekTotal) * 100;
-      if (change > 0) {
-        trendText = 'Up ${change.toStringAsFixed(0)}% vs last week';
-        trendIcon = Icons.trending_up_rounded;
-        trendColor = AppColors.error;
-      } else if (change < 0) {
-        trendText = 'Down ${change.abs().toStringAsFixed(0)}% vs last week';
-        trendIcon = Icons.trending_down_rounded;
-        trendColor = AppColors.success;
-      } else {
-        trendText = 'Same as last week';
-      }
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.background, width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: trendColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(trendIcon, color: trendColor, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Last 7 days: ₹${thisWeekTotal.toStringAsFixed(2)}',
-                  style: AppTextStyles.body,
-                ),
-                if (trendText != null) ...[
-                  const SizedBox(height: 2),
-                  Text(trendText, style: AppTextStyles.caption),
-                ],
-              ],
-            ),
-          ),
-        ],
+    return _cardWrapper(
+      child: DailyTrendChart(
+        dayLabels: labels,
+        values: values,
+        barColor: AppColors.primary,
       ),
     );
   }
 
   // ---------------- Time ----------------
 
-  Widget _buildTimeSection(List sessions) {
+  Widget _buildTimeSection(List<dynamic> sessions) {
     final totalDuration = sessions.fold<Duration>(
       Duration.zero,
       (sum, s) => sum + (s.duration as Duration),
@@ -262,36 +244,107 @@ class InsightsScreen extends StatelessWidget {
     for (final s in sessions) {
       final category = s.category as TimeCategory;
       final duration = s.duration as Duration;
-      byCategory[category] = (byCategory[category] ?? Duration.zero) + duration;
+      byCategory[category] =
+          (byCategory[category] ?? Duration.zero) + duration;
     }
-    final topCategory = byCategory.entries.reduce(
-      (a, b) => a.value >= b.value ? a : b,
-    );
+    final sortedCategories = byCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final topCategory = sortedCategories.first;
 
-    return Row(
+    final distinctDays =
+        sessions.map((s) => _dateOnly(s.startTime as DateTime)).toSet();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: InsightStatCard(
-            label: 'Total Tracked Time',
-            icon: Icons.timer_rounded,
-            color: AppColors.primary,
-            value: _formatDuration(totalDuration),
+        Row(
+          children: [
+            Expanded(
+              child: InsightStatCard(
+                label: 'Total Tracked Time',
+                icon: Icons.timer_rounded,
+                color: AppColors.primary,
+                value: _formatDuration(totalDuration),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: InsightStatCard(
+                label: 'Most Productive Category',
+                icon: Icons.trending_up_rounded,
+                color: const Color(0xFFEF5350),
+                value: topCategory.key.label,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        Text('Time Distribution', style: AppTextStyles.title),
+        const SizedBox(height: 12),
+        _cardWrapper(
+          child: CategoryDistributionChart(
+            segments: sortedCategories
+                .map(
+                  (entry) => ChartSegment(
+                    label: entry.key.label,
+                    value: entry.value.inMinutes.toDouble(),
+                    color: entry.key.color,
+                  ),
+                )
+                .toList(),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: InsightStatCard(
-            label: 'Most Productive Category',
-            icon: Icons.trending_up_rounded,
-            color: const Color(0xFFEF5350),
-            value: topCategory.key.label,
-          ),
-        ),
+        const SizedBox(height: 20),
+
+        Text('Time Tracking Trend', style: AppTextStyles.title),
+        const SizedBox(height: 12),
+        if (distinctDays.length < 2)
+          _buildEmptyState(
+            icon: Icons.show_chart_rounded,
+            title: 'Not enough data for a trend yet',
+            message:
+                'Complete tracking sessions on more than one day to see a trend.',
+          )
+        else
+          _buildTimeTrendChart(sessions),
       ],
     );
   }
 
-  // ---------------- Shared empty state ----------------
+  Widget _buildTimeTrendChart(List<dynamic> sessions) {
+    final days = _last7Days();
+    final values = days.map((day) {
+      final totalMinutes = sessions
+          .where((s) => _dateOnly(s.startTime as DateTime) == day)
+          .fold<int>(0, (sum, s) => sum + (s.duration as Duration).inMinutes);
+      return totalMinutes.toDouble();
+    }).toList();
+    final labels = days.map((day) => _weekdayShort[day.weekday - 1]).toList();
+
+    return _cardWrapper(
+      child: DailyTrendChart(
+        dayLabels: labels,
+        values: values,
+        barColor: AppColors.secondary,
+      ),
+    );
+  }
+
+  // ---------------- Shared ----------------
+
+  Widget _cardWrapper({required Widget child, EdgeInsets? padding}) {
+    return Container(
+      width: double.infinity,
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.background, width: 1.5),
+      ),
+      child: child,
+    );
+  }
 
   Widget _buildEmptyState({
     required IconData icon,
