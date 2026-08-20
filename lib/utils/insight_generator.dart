@@ -30,6 +30,15 @@ const List<String> _months = [
 
 String _formatDate(DateTime date) => '${date.day} ${_months[date.month - 1]}';
 
+bool _isWeekend(DateTime date) =>
+    date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+
+/// The last 7 calendar days including today, oldest first.
+List<DateTime> _last7Days() {
+  final today = _dateOnly(DateTime.now());
+  return List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
+}
+
 /// Generates rule-based insights purely from real data. Each rule is
 /// self-guarded: it only produces a sentence when the data actually
 /// supports the claim, otherwise it silently produces nothing.
@@ -41,56 +50,62 @@ List<GeneratedInsight> generateInsights({
   final today = _dateOnly(DateTime.now());
   final yesterday = today.subtract(const Duration(days: 1));
 
-  // ---- Highest spending category ----
-  // Only meaningful when 2+ categories have spending and there's a
-  // clear (non-tied) leader.
+  // ============= SPENDING =============
+
+  Map<ExpenseCategory, double>? expenseByCategory;
+  double expenseTotal = 0;
   if (expenses.isNotEmpty) {
-    final Map<ExpenseCategory, double> byCategory = {};
+    expenseByCategory = {};
     for (final e in expenses) {
-      byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount;
-    }
-    if (byCategory.length >= 2) {
-      final sorted = byCategory.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      if (sorted[0].value > sorted[1].value) {
-        insights.add(
-          GeneratedInsight(
-            text: '${sorted[0].key.label} is your highest spending category.',
-            tone: InsightTone.neutral,
-          ),
-        );
-      }
+      expenseByCategory[e.category] =
+          (expenseByCategory[e.category] ?? 0) + e.amount;
+      expenseTotal += e.amount;
     }
   }
 
-  // ---- Dominant tracked-time category + comparison ----
-  if (sessions.isNotEmpty) {
-    final Map<TimeCategory, Duration> byCategory = {};
-    for (final s in sessions) {
-      byCategory[s.category] =
-          (byCategory[s.category] ?? Duration.zero) + s.duration;
-    }
-    if (byCategory.length >= 2) {
-      final sorted = byCategory.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      if (sorted[0].value > sorted[1].value) {
+  // ---- 1. Highest spending category ----
+  // Only meaningful when 2+ categories have spending and there's a
+  // clear (non-tied) leader.
+  List<MapEntry<ExpenseCategory, double>>? sortedExpenseCategories;
+  if (expenseByCategory != null && expenseByCategory.length >= 2) {
+    sortedExpenseCategories = expenseByCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (sortedExpenseCategories[0].value > sortedExpenseCategories[1].value) {
+      insights.add(
+        GeneratedInsight(
+          text:
+              '${sortedExpenseCategories[0].key.label} is your highest '
+              'spending category.',
+          tone: InsightTone.neutral,
+        ),
+      );
+
+      // ---- 2. Spending concentration/pattern ----
+      // Only claim "concentration" when the leader clearly dominates
+      // (>=50% of total) — otherwise spending is fairly spread out
+      // and no concentration claim is supportable.
+      final share = sortedExpenseCategories[0].value / expenseTotal;
+      if (share >= 0.5) {
         insights.add(
           GeneratedInsight(
             text:
-                'You spent most of your tracked time on ${sorted[0].key.label}.',
+                '${sortedExpenseCategories[0].key.label} makes up '
+                '${(share * 100).round()}% of your total spending.',
             tone: InsightTone.neutral,
           ),
         );
-
-        // Only surface the numeric comparison when the gap is at
-        // least 10 minutes — otherwise "more" is barely meaningful.
-        final diff = sorted[0].value - sorted[1].value;
-        if (diff.inMinutes >= 10) {
+      } else if (expenseByCategory.length >= 3) {
+        // With enough categories, note when spending is instead
+        // spread fairly evenly (no category over ~35%).
+        final maxShare = sortedExpenseCategories
+            .map((e) => e.value / expenseTotal)
+            .reduce((a, b) => a > b ? a : b);
+        if (maxShare < 0.35) {
           insights.add(
-            GeneratedInsight(
-              text:
-                  'You spent ${_formatDuration(diff)} more on '
-                  '${sorted[0].key.label} than ${sorted[1].key.label}.',
+            const GeneratedInsight(
+              text: 'Your spending is fairly spread across categories, '
+                  'without one dominating.',
               tone: InsightTone.neutral,
             ),
           );
@@ -102,16 +117,16 @@ List<GeneratedInsight> generateInsights({
   // ---- Unusually high spending day ----
   // Needs enough spread of data (3+ distinct days) so "average" and
   // "unusual" both mean something.
+  Map<DateTime, double>? expenseByDay;
   if (expenses.isNotEmpty) {
-    final Map<DateTime, double> byDay = {};
+    expenseByDay = {};
     for (final e in expenses) {
       final day = _dateOnly(e.date);
-      byDay[day] = (byDay[day] ?? 0) + e.amount;
+      expenseByDay[day] = (expenseByDay[day] ?? 0) + e.amount;
     }
-    if (byDay.length >= 3) {
-      final total = byDay.values.fold<double>(0, (sum, v) => sum + v);
-      final average = total / byDay.length;
-      final sortedDays = byDay.entries.toList()
+    if (expenseByDay.length >= 3) {
+      final average = expenseTotal / expenseByDay.length;
+      final sortedDays = expenseByDay.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
       final highest = sortedDays.first;
 
@@ -123,6 +138,44 @@ List<GeneratedInsight> generateInsights({
                 '${_formatDate(highest.key)} — well above your daily '
                 'average of ₹${average.toStringAsFixed(2)}.',
             tone: InsightTone.warning,
+          ),
+        );
+      }
+    }
+  }
+
+  // ---- 5a. Weekday vs weekend spending ----
+  // Only compared when there's real data on both sides — at least 2
+  // distinct weekday dates AND 2 distinct weekend dates — so a
+  // single weekend outing can't skew the claim.
+  if (expenseByDay != null && expenseByDay.length >= 4) {
+    final weekendDays =
+        expenseByDay.keys.where(_isWeekend).toList();
+    final weekdayDays =
+        expenseByDay.keys.where((d) => !_isWeekend(d)).toList();
+
+    if (weekendDays.length >= 2 && weekdayDays.length >= 2) {
+      final weekendAvg =
+          weekendDays.fold<double>(0, (s, d) => s + expenseByDay![d]!) /
+              weekendDays.length;
+      final weekdayAvg =
+          weekdayDays.fold<double>(0, (s, d) => s + expenseByDay![d]!) /
+              weekdayDays.length;
+
+      // Require a meaningfully large gap (>=20%) before calling it a
+      // pattern, not just normal day-to-day variation.
+      if (weekendAvg > weekdayAvg * 1.2) {
+        insights.add(
+          const GeneratedInsight(
+            text: 'You tend to spend more on weekends than on weekdays.',
+            tone: InsightTone.neutral,
+          ),
+        );
+      } else if (weekdayAvg > weekendAvg * 1.2) {
+        insights.add(
+          const GeneratedInsight(
+            text: 'You tend to spend more on weekdays than on weekends.',
+            tone: InsightTone.neutral,
           ),
         );
       }
@@ -152,6 +205,114 @@ List<GeneratedInsight> generateInsights({
         ),
       );
     }
+  }
+
+  // ============= TIME TRACKING =============
+
+  Map<TimeCategory, Duration>? timeByCategory;
+  Duration timeTotal = Duration.zero;
+  if (sessions.isNotEmpty) {
+    timeByCategory = {};
+    for (final s in sessions) {
+      timeByCategory[s.category] =
+          (timeByCategory[s.category] ?? Duration.zero) + s.duration;
+      timeTotal += s.duration;
+    }
+  }
+
+  // ---- 3. Most tracked time category (+ share) ----
+  if (timeByCategory != null && timeByCategory.length >= 2) {
+    final sortedTimeCategories = timeByCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (sortedTimeCategories[0].value > sortedTimeCategories[1].value) {
+      insights.add(
+        GeneratedInsight(
+          text:
+              'You spent most of your tracked time on '
+              '${sortedTimeCategories[0].key.label}.',
+          tone: InsightTone.neutral,
+        ),
+      );
+
+      final share =
+          sortedTimeCategories[0].value.inMinutes / timeTotal.inMinutes;
+      if (share >= 0.5) {
+        insights.add(
+          GeneratedInsight(
+            text:
+                '${sortedTimeCategories[0].key.label} accounts for '
+                '${(share * 100).round()}% of your tracked time.',
+            tone: InsightTone.neutral,
+          ),
+        );
+      }
+
+      // Direct comparison between the top two, only when the gap is
+      // large enough (>=10 minutes) to be worth stating.
+      final diff = sortedTimeCategories[0].value - sortedTimeCategories[1].value;
+      if (diff.inMinutes >= 10) {
+        insights.add(
+          GeneratedInsight(
+            text:
+                'You spent ${_formatDuration(diff)} more on '
+                '${sortedTimeCategories[0].key.label} than '
+                '${sortedTimeCategories[1].key.label}.',
+            tone: InsightTone.neutral,
+          ),
+        );
+      }
+    }
+  }
+
+  // ---- 4. Tracking consistency across recent days ----
+  // Only evaluated once there's at least 3 distinct days of tracking
+  // history overall — otherwise "consistency" isn't a fair judgment
+  // to make yet (e.g. day 1 of using the app).
+  if (sessions.isNotEmpty) {
+    final allTrackedDays =
+        sessions.map((s) => _dateOnly(s.startTime)).toSet();
+
+    if (allTrackedDays.length >= 3) {
+      final last7 = _last7Days();
+      final daysTrackedInLast7 =
+          last7.where((day) => allTrackedDays.contains(day)).length;
+
+      if (daysTrackedInLast7 >= 5) {
+        insights.add(
+          GeneratedInsight(
+            text:
+                'You\'ve tracked time on $daysTrackedInLast7 of the last '
+                '7 days — great consistency!',
+            tone: InsightTone.positive,
+          ),
+        );
+      } else if (daysTrackedInLast7 <= 2) {
+        insights.add(
+          GeneratedInsight(
+            text:
+                'You\'ve only tracked time on $daysTrackedInLast7 of the '
+                'last 7 days. Try to track a little more consistently.',
+            tone: InsightTone.warning,
+          ),
+        );
+      }
+    }
+  }
+
+  // ---- 5b. Average session length ----
+  // Only surfaced with a reasonable sample size (5+ sessions) so one
+  // unusually long/short session doesn't define the "average" claim.
+  if (sessions.length >= 5) {
+    final avgMinutes = timeTotal.inMinutes / sessions.length;
+    insights.add(
+      GeneratedInsight(
+        text:
+            'Your average tracking session is about '
+            '${avgMinutes.round()} minutes.',
+        tone: InsightTone.neutral,
+      ),
+    );
   }
 
   // ---- Today vs yesterday: tracked time ----
