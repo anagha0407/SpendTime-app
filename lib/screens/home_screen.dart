@@ -88,6 +88,7 @@ class HomeScreen extends StatelessWidget {
                       activityName: trackingService.activeActivityName!,
                       category: trackingService.activeCategory!,
                       elapsed: trackingService.elapsed,
+                      isPaused: trackingService.isPaused,
                       onTap: () => _openTrackingScreen(context),
                     ),
                     const SizedBox(height: 20),

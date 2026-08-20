@@ -3,11 +3,12 @@ import '../models/time_category.dart';
 import '../services/tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import '../widgets/lap_row.dart';
 
 /// Screen for starting and running a time-tracking session.
 ///
-/// If a session is already active, this opens straight into the
-/// active-timer view instead of the setup form.
+/// If a session is already active (running or paused), this opens
+/// straight into the active-timer view instead of the setup form.
 class TrackingScreen extends StatefulWidget {
   final TrackingService trackingService;
 
@@ -41,6 +42,10 @@ class _TrackingScreenState extends State<TrackingScreen> {
   void _handleStop() {
     widget.trackingService.stop();
     Navigator.of(context).pop();
+  }
+
+  void _handleReset() {
+    widget.trackingService.reset();
   }
 
   String _formatElapsed(Duration d) {
@@ -130,11 +135,13 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   Widget _buildActiveView(TrackingService service) {
     final category = service.activeCategory!;
-    return Padding(
+    final isPaused = service.isPaused;
+
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const SizedBox(height: 8),
           Icon(category.icon, size: 40, color: category.color),
           const SizedBox(height: 12),
           Text(
@@ -143,16 +150,26 @@ class _TrackingScreenState extends State<TrackingScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
-          Text(category.label, style: AppTextStyles.caption),
+          Text(
+            isPaused ? '${category.label} • Paused' : category.label,
+            style: AppTextStyles.caption.copyWith(
+              color: isPaused ? AppColors.error : AppColors.textSecondary,
+              fontWeight: isPaused ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
           const SizedBox(height: 32),
           Text(
             _formatElapsed(service.elapsed),
             style: AppTextStyles.headline.copyWith(
               fontSize: 48,
-              color: category.color,
+              color: isPaused ? AppColors.textSecondary : category.color,
             ),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 32),
+
+          _buildControls(service),
+
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -164,8 +181,86 @@ class _TrackingScreenState extends State<TrackingScreen> {
               label: const Text('Stop Tracking'),
             ),
           ),
+
+          if (service.laps.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Laps', style: AppTextStyles.title),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.background, width: 1.5),
+              ),
+              child: Column(
+                children: service.laps.reversed
+                    .map((lap) => LapRow(lap: lap))
+                    .toList(),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  /// Running: [Pause] [Lap] [Reset].  Paused: [Resume] [Reset].
+  Widget _buildControls(TrackingService service) {
+    if (service.isPaused) {
+      return Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: service.resume,
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Resume'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _handleReset,
+              style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reset'),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: service.pause,
+            icon: const Icon(Icons.pause_rounded),
+            label: const Text('Pause'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: service.lap,
+            icon: const Icon(Icons.flag_rounded),
+            label: const Text('Lap'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _handleReset,
+            style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Reset'),
+          ),
+        ),
+      ],
     );
   }
 }

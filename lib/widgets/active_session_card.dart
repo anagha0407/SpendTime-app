@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import '../models/time_category.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
-/// Compact card shown on Home while a session is actively running.
-/// Tapping it opens the full tracking screen.
+/// Compact card shown on Home while a session is active (running or
+/// paused). Tapping it opens the full tracking screen.
 class ActiveSessionCard extends StatelessWidget {
   final String activityName;
   final TimeCategory category;
   final Duration elapsed;
+  final bool isPaused;
   final VoidCallback onTap;
 
   const ActiveSessionCard({
@@ -15,6 +17,7 @@ class ActiveSessionCard extends StatelessWidget {
     required this.activityName,
     required this.category,
     required this.elapsed,
+    this.isPaused = false,
     required this.onTap,
   });
 
@@ -26,6 +29,8 @@ class ActiveSessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accentColor = isPaused ? AppColors.textSecondary : category.color;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -33,9 +38,9 @@ class ActiveSessionCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: category.color.withOpacity(0.12),
+          color: accentColor.withOpacity(0.12),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: category.color.withOpacity(0.4)),
+          border: Border.all(color: accentColor.withOpacity(0.4)),
         ),
         child: Row(
           children: [
@@ -43,7 +48,7 @@ class ActiveSessionCard extends StatelessWidget {
               width: 10,
               height: 10,
               decoration: BoxDecoration(
-                color: category.color,
+                color: accentColor,
                 shape: BoxShape.circle,
               ),
             ),
@@ -53,9 +58,9 @@ class ActiveSessionCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Tracking now',
+                    isPaused ? 'Paused' : 'Tracking now',
                     style: AppTextStyles.caption.copyWith(
-                      color: category.color,
+                      color: accentColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -71,7 +76,7 @@ class ActiveSessionCard extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               _formatElapsed(elapsed),
-              style: AppTextStyles.title.copyWith(color: category.color),
+              style: AppTextStyles.title.copyWith(color: accentColor),
             ),
           ],
         ),
