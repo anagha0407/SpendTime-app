@@ -4,8 +4,10 @@ import '../services/tracking_service.dart';
 import '../services/expense_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import '../utils/budget_dialog.dart';
 import '../widgets/active_session_card.dart';
 import '../widgets/activity_tile.dart';
+import '../widgets/budget_card.dart';
 import '../widgets/category_tile.dart';
 import '../widgets/expense_list_section.dart';
 import '../widgets/overview_card.dart';
@@ -61,7 +63,7 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: AnimatedBuilder(
           // Listen to BOTH services, so Home rebuilds whether a
-          // tracking session changes or a new expense is added.
+          // tracking session changes or an expense/budget changes.
           animation: Listenable.merge([trackingService, expenseService]),
           builder: (context, _) {
             return SingleChildScrollView(
@@ -94,6 +96,13 @@ class HomeScreen extends StatelessWidget {
                   OverviewCard(
                     total: trackingService.todayTotal,
                     goal: const Duration(hours: 8),
+                  ),
+                  const SizedBox(height: 24),
+
+                  BudgetCard(
+                    expenseService: expenseService,
+                    onEditBudget: () =>
+                        showSetBudgetDialog(context, expenseService),
                   ),
                   const SizedBox(height: 24),
 

@@ -25,6 +25,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     _trackingService = TrackingService();
     _expenseService = ExpenseService();
     _expenseService.loadExpenses(); // load saved expenses on app start
+    _expenseService.loadBudgets(); // load saved monthly budgets on app start
   }
 
   @override

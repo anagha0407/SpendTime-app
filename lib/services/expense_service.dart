@@ -9,6 +9,12 @@ class ExpenseService extends ChangeNotifier {
   // The single key we store all expenses under in SharedPreferences.
   static const String _storageKey = 'expenses';
 
+  // Monthly budgets, keyed by "yyyy-MM" (e.g. "2026-08"), stored
+  // under a single separate SharedPreferences key so each calendar
+  // month has its own independent budget.
+  final Map<String, double> _monthlyBudgets = {};
+  static const String _budgetStorageKey = 'monthly_budgets';
+
   List<Expense> get expenses => List.unmodifiable(_expenses);
 
   /// Reads any previously saved expenses from disk.
@@ -80,5 +86,66 @@ class ExpenseService extends ChangeNotifier {
     }).toList();
 
     await prefs.setStringList(_storageKey, jsonList);
+  }
+
+  // ==================== Monthly Budget ====================
+
+  /// Turns a date into its "yyyy-MM" month key, e.g. 2026-08-21 -> "2026-08".
+  String _monthKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}';
+  }
+
+  /// The budget set for the given month, or null if none was set.
+  double? getBudgetForMonth(DateTime month) {
+    return _monthlyBudgets[_monthKey(month)];
+  }
+
+  /// The budget for the current calendar month, or null if unset.
+  double? get currentMonthBudget => getBudgetForMonth(DateTime.now());
+
+  /// Sets (or updates) the budget for the given month.
+  Future<void> setBudgetForMonth(DateTime month, double amount) async {
+    _monthlyBudgets[_monthKey(month)] = amount;
+    notifyListeners();
+    await _saveBudgets();
+  }
+
+  /// Sum of all expenses whose date falls within the given month.
+  double spentInMonth(DateTime month) {
+    return _expenses
+        .where(
+          (e) => e.date.year == month.year && e.date.month == month.month,
+        )
+        .fold<double>(0, (sum, e) => sum + e.amount);
+  }
+
+  /// Total spent so far in the current calendar month.
+  double get currentMonthSpent => spentInMonth(DateTime.now());
+
+  /// Reads all saved monthly budgets from disk.
+  /// Call this once, alongside loadExpenses(), at app startup.
+  Future<void> loadBudgets() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_budgetStorageKey);
+
+    if (jsonString == null) {
+      // No budgets saved yet — nothing to load.
+      return;
+    }
+
+    final map = jsonDecode(jsonString) as Map<String, dynamic>;
+    _monthlyBudgets.clear();
+    map.forEach((key, value) {
+      _monthlyBudgets[key] = (value as num).toDouble();
+    });
+
+    notifyListeners();
+  }
+
+  /// Writes all monthly budgets to SharedPreferences as one JSON object,
+  /// e.g. {"2026-08": 10000.0, "2026-09": 12000.0}.
+  Future<void> _saveBudgets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_budgetStorageKey, jsonEncode(_monthlyBudgets));
   }
 }
